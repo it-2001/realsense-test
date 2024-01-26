@@ -35,7 +35,7 @@ int main() {
     rs2::pipeline_profile profile;
 
     // Specify the path to the bag file
-    std::string bagFilePath = "../file.bag";
+    std::string bagFilePath = "../../bgr.bag";
     std::string winName = "imaaag";
     std::string frames_dir = "../frames/";
 
@@ -50,22 +50,21 @@ int main() {
     rs2::video_stream_profile color_profile = profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
     int color_width = color_profile.width();
     int color_height = color_profile.height();
+    //rs2::video_stream_profile color_profile = profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
+    //int color_width = color_profile.width();
+    //int color_height = color_profile.height();
     int fps = color_profile.fps();
-    rs2::frameset frameset;
-    pipe.try_wait_for_frames(&frameset);
-    rs2::depth_frame depth_frame = frameset.get_depth_frame();
-
-    // search here: [[DUPLICATE_FRAMES]]
-    auto first_frame = depth_frame.get_frame_number();
-    auto last_frame = depth_frame.get_frame_number();
-
-    std::cout << "first frame: " << first_frame << std::endl;
+    
+    auto device = pipe.get_active_profile().get_device();
+    auto playback = device.as<rs2::playback>();
+    playback.set_real_time(false);
+    
 
     cv::Mat image;
     cv::Mat depth_image;
     cv::VideoWriter video;
     std::string outputVideo = "video.avi";
-    video.open(outputVideo, cv::VideoWriter::fourcc('X','V','I','D'), fps, cv::Size(color_width, color_height));
+    video.open(outputVideo, cv::VideoWriter::fourcc('X','V','I','D'), fps/2, cv::Size(color_width, color_height));
     
     // cv::namedWindow(winName);
 
@@ -91,63 +90,25 @@ int main() {
         int width = depth_frame.get_width();
         int height = depth_frame.get_height();
 
-        // Initialize variables to store the furthest pixel coordinates and distance
-        int furthest_x = 0;
-        int furthest_y = 0;
-        float furthest_distance = 0.0f;
-
-        // [[DUPLICATE_FRAMES]]
-        // sometimes realsense returns duplicate frames
-        // maybe this is intentional, needs further research
-        // TODO: find better method of getting frames
-        auto fnum = depth_frame.get_frame_number();
-        // end of file
-        // may fail to break if pipe skips first frame on next iteration
-        if (fnum == first_frame) {
-            break;
-        }
-        // duplicate frame
-        else if (fnum == last_frame) {
-            continue;
-        }
-        last_frame = fnum;
-
-
-        // Iterate through all pixels in the depth frame
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                // Get the distance for the current pixel
-                float distance = depth_frame.get_distance(x, y);
-
-                // Check if the current pixel is further than the previous furthest pixel
-                if (distance > furthest_distance) {
-                    furthest_x = x;
-                    furthest_y = y;
-                    furthest_distance = distance;
-                }
-            }
-        }
-
         // Print the distance for the furthest pixel
-        std::cout << "Furthest pixel coordinates: (" << furthest_x << ", " << furthest_y << ")"
-            << " Distance: " << furthest_distance << " meters, frame: " << fnum << " timestamp: " << timestamp << std::endl;
 
 
         auto imageData = color_frame.get_data();
         auto deptData = depth_frame.get_data();
+        
+        auto fnum = depth_frame.get_frame_number();
 
         
         image = cv::Mat(cv::Size(color_width, color_height), CV_8UC3, (void*)color_frame.get_data(), cv::Mat::AUTO_STEP);
         if (image.empty()) {
             break;
         }
-        depth_image = cv::Mat(cv::Size(color_width, color_height), CV_64F, (void*)depth_frame.get_data(), cv::Mat::AUTO_STEP);
+        depth_image = cv::Mat(cv::Size(color_width, color_height), CV_8UC3, (void*)depth_frame.get_data(), cv::Mat::AUTO_STEP);
 
 
         video.write(image);
-        std::cout << frames_dir + "f" + std::to_string((int)fnum) + ".png\n";
-        //imwrite(frames_dir + "f" + std::to_string((int)fnum) + ".png", image);
-        // imwrite(frames_dir + "d" + std::to_string((int)fnum) + ".tif", depth_image);
+        imwrite(frames_dir + "f" + std::to_string((int)fnum) + ".png", image);
+        imwrite(frames_dir + "d" + std::to_string((int)fnum) + ".tif", depth_image);
         // imshow(winName, image);
 
 
@@ -162,6 +123,7 @@ int main() {
         // ...
             
     }
+    
 
     // Stop the pipeline
     video.release();
@@ -177,3 +139,4 @@ int main() {
 // encoding
 // confidence
 // syncer
+ 
